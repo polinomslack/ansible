@@ -1,0 +1,46 @@
+---
+- name: install git
+  apt: name={{ item }} state=installed update_cache=yes
+  with_items:
+    - git
+    - ansible
+  become: true
+
+- name: limit groups who can connect via ssh
+  lineinfile:
+    dest: /etc/ssh/sshd_config
+    state: present
+    regexp: '^AllowGroups'
+    line: 'AllowGroups sudo'
+  become: true
+  notify:
+    - restart sshd
+
+- name: put private key to /home/cmgmtuser/.ssh/id_rsa
+  copy:
+    src: /etc/ssl/keys/cmgmtuser.id_rsa
+    dest: /home/cmgmtuser/.ssh/id_rsa
+    owner: cmgmtuser
+    group: cmgmtuser
+    mode: 0400
+  become: true
+
+- name: put ansible config file
+  copy:
+    src: files/ansible.cfg
+    dest: /etc/ansible/ansible.cfg
+    owner: root
+    group: root
+    mode: 0644
+    backup: yes
+  become: true
+
+- name: clone git infrastructure repository
+  git:
+    repo: ssh://<your git url>
+    dest: /home/cmgmtuser/git
+    accept_hostkey: true
+  become_user: cmgmtuser
+  become: true
+
+

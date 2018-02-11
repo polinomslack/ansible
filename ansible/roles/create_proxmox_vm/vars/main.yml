@@ -1,0 +1,3 @@
+image_name: xenial-server-cloudimg-amd64-disk1
+storage: data
+listOfZones: []

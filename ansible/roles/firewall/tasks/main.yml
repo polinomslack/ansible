@@ -1,0 +1,106 @@
+---
+- include: stop_arno_firewall.yml
+  when: stop_arno is defined and stop_arno
+  tags:
+    - stop_arno
+
+- name: ensure iptables-persistent is installed
+  apt: name={{ item }} state=present update_cache=yes
+  with_items:
+    - iptables-persistent
+    - iptables
+  become: yes
+
+- name: clean temp role directory
+  file: path="/etc/iptables/temprules" state=absent
+  become: true
+
+- name: create temp role directory
+  file: path="/etc/iptables/temprules" state=directory mode=0755 owner=root group=root mode=0660
+  become: true
+
+- name: apply default firewall rules
+  template: src=rules/fw_default.j2 dest=/etc/iptables/temprules/_default.v4 owner=root group=root mode=0660
+  become: yes
+
+- name: unite all inventories members together
+  script: files/gen_hosts.py
+  register: hosts_allow
+  delegate_to: localhost
+  when: multiple_inventory
+
+- debug: var=group_names
+
+- name: built fw rules from template {{ item }}
+  template: src=rules/{{ item }}.j2 dest=/etc/iptables/temprules/{{ item }}.v4 owner=root group=root mode=0660
+  with_items: "{{ group_names }}"
+  when: group_names|length != 0
+  ignore_errors: yes
+  become: yes
+
+- name: assemble all firewall rules
+  assemble:
+    src: /etc/iptables/temprules/
+    dest: /etc/iptables/rules.v4
+    delimiter: '### ### ### ###'
+    backup: yes
+  become: true
+
+- name: include COMMIT in the end of the role
+  lineinfile:
+    path: /etc/iptables/rules.v4 
+    line: 'COMMIT'
+    state: present
+  become: true
+
+- name: check syntax of FW ruleset
+  command: iptables-restore -t -v /etc/iptables/rules.v4
+  become: yes
+
+- name: start iptables
+  command: iptables-restore /etc/iptables/rules.v4
+  become: yes
+
+- name: add iptables autostart
+  copy: src=iptables dest=/etc/network/if-pre-up.d/iptables mode=0755 owner=root group=root
+  become: yes
+
+- name: check if arno exists
+  stat: path=/etc/arno-iptables-firewall
+  become: yes
+  register: arno_exists
+  tags:
+    - iptables-cron
+
+- name: copy iptables-cron.py to /etc/iptables
+  copy: src=iptables-cron.py dest=/etc/iptables/iptables-cron.py mode=0750 owner=root group=root
+  become: yes
+  when: not arno_exists.stat.exists or ( stop_arno is defined and stop_arno )
+  tags:
+    - iptables-cron
+
+- name: delete obsolete job
+  cron:
+    name: iptables-cron
+    minute: "*/5"
+    job: "/etc/iptables/iptables-cron.py"
+    state: absent
+  become: yes
+  when: not arno_exists.stat.exists or ( stop_arno is defined and stop_arno )
+  tags:
+    - iptables-cron
+
+- name: add iptables-cron.py job
+  cron:
+    name: iptables-cron
+    minute: "*/5"
+    job: "/etc/iptables/iptables-cron.py > /dev/null 2>&1"
+  become: yes
+  when: not arno_exists.stat.exists or ( stop_arno is defined and stop_arno )
+  tags:
+    - iptables-cron
+
+- include: disable_arno_firewall.yml
+  when: disable_arno is defined and disable_arno
+  tags:
+    - disable_arno

@@ -1,0 +1,30 @@
+---
+- name: install python
+  raw: apt-get install -y python aptitude
+  become: true
+
+- name: set timezone
+  copy: remote_src=yes src=/usr/share/zoneinfo/Europe/Berlin dest=/etc/localtime owner=root group=root mode=0644
+  become: yes
+
+- name: system upgrade
+  apt: update_cache=yes upgrade=yes
+  become: true
+
+- name: disable unnecessary services
+  systemd: enabled=no name={{ item }} state=stopped
+  with_items:
+    - irqbalance
+    - mdadm
+    - lxcfs
+    - lxd-containers
+    - snapd
+    - ufw
+    - apport
+    - ondemand
+    - iscsid
+    - open-iscsi
+    - snapd.autoimport
+  become: true
+
+

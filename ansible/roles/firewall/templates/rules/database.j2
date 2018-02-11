@@ -1,0 +1,6 @@
+{% if env == "stage" %}
+-A INPUT -s {{ office_networks}} -i eth0 -p tcp -m tcp -m multiport --dports 27017 -m state --state NEW,ESTABLISHED -j ACCEPT
+{% endif %}
+
+{% set servers = groups['webserver'] %}
+-A INPUT -s {% for node in servers %}{{ node }}{% if not loop.last %},{% endif %}{% endfor %} -i eth0 -p tcp -m tcp -m multiport --dports 27017,3306 -m state --state NEW,ESTABLISHED -j ACCEPT

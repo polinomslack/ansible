@@ -1,0 +1,48 @@
+---
+- name: setup hostname
+  hostname: name={{ inventory_hostname }}
+  become: true
+
+- name: edit /etc/hosts
+  lineinfile:
+    regexp: "{{ inventory_hostname }}"
+    state: present
+    line: "{{ ansible_default_ipv4['address'] }} {{ inventory_hostname }}"
+    dest: /etc/hosts
+  become: true
+
+- name: remove old dns servers from /etc/resolv.conf
+  lineinfile:
+    state: absent
+    regexp: '^nameserver.*'
+    path: /etc/resolv.conf
+  become: True
+
+- name: add Google DNS servers to /etc/resolv.conf
+  lineinfile:
+    insertbefore: BOF
+    state: present
+    line: "{{ item }}"
+    path: /etc/resolv.conf
+  with_items:
+    - 'nameserver 8.8.8.8'
+    - 'nameserver 8.8.4.4'
+  become: True
+
+- name: setup timezone
+  timezone: name=Europe/Berlin
+  become: true
+
+- name: setup bash history with timestamps
+  lineinfile:
+    line: 'HISTTIMEFORMAT="%d/%m/%y %T"'
+    dest: "{{ item }}"
+    state: present
+  with_items:
+    - /etc/skel/.bashrc
+    - /root/.bashrc
+  become: true
+
+- name: include role to create users
+  include_role:
+    name: cred_rotation

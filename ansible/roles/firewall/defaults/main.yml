@@ -1,0 +1,7 @@
+management_hosts: <hosts with management rights>
+jenkins: <jenkins machine>
+selenium: <selenium>
+office_networks: <internal network ranges>
+tomcat_web_ports: 9090,9190,9290,9390,8080
+tomcat_ajp_ports: 9009,9109,9209,9309,8809
+multiple_inventory: False

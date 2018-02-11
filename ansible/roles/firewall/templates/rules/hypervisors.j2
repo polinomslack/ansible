@@ -1,0 +1,12 @@
+#Proxmox console from internal network ranges
+-A INPUT -i eth0 -s {{ office_networks }},{{ management_hosts }} -p tcp -m tcp -m multiport --dports 8006 -m state --state NEW,ESTABLISHED -j ACCEPT
+
+{% if env=="live" %}
+-A INPUT -i vmbr1 -s {{ cluster_internal_ranges }} -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+-A OUTPUT -o vmbr1 -s {{ cluster_internal_ranges }} -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+{% endif %}
+
+#set 'allow all from any to any' for hypervisor VM networks
+-A FORWARD -i vmbr0 -s {{ vm_networks }} -j ACCEPT
+-A FORWARD -o vmbr0 -d {{ vm_networks }} -j ACCEPT
+

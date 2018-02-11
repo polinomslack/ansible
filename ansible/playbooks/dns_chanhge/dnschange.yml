@@ -1,0 +1,21 @@
+---
+- hosts: all
+  gather_facts: False
+  tasks:
+  - name: remove hetzner dns servers from /etc/resolv.conf
+    lineinfile:
+      state: absent
+      regexp: '^nameserver.*'
+      path: /etc/resolv.conf
+    become: True
+
+  - name: add Google DNS servers to /etc/resolv.conf
+    lineinfile:
+      insertbefore: BOF
+      state: present
+      line: "{{ item }}"
+      path: /etc/resolv.conf
+    with_items:
+      - 'nameserver 8.8.8.8'
+      - 'nameserver 8.8.4.4'
+    become: True

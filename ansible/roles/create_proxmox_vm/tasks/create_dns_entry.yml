@@ -1,0 +1,61 @@
+---
+- name: check availables zones
+  route53_facts:
+    aws_access_key: "{{ lookup('file', '/etc/ssl/keys/aws_route53/aws_access_key_route53.key') }}"
+    aws_secret_key: "{{ lookup('file', '/etc/ssl/keys/aws_route53/aws_secret_key_route53.key') }}"
+    query: hosted_zone
+  delegate_to: localhost
+  register: zones
+  tags:
+    - dns
+
+- name: get hosted zone from hostname
+  set_fact: cHostedZone="{{ '.'.join(inventory_hostname.split('.')[-3:]) }}."
+  delegate_to: localhost
+  tags:
+    - dns
+
+- name: get list of HostedZones
+  set_fact:
+    listOfZones: "{{ listOfZones + [ item.Name ] }}"
+  with_items:
+    - "{{ zones.HostedZones }}"
+  delegate_to: localhost
+  tags:
+    - dns
+
+- name: check if a current inventory_hostname matches accessible HostedZones
+  fail: msg="Check that your {{ inventory_hostname }} is presented in Route53 delegated zones"
+  when: cHostedZone not in listOfZones
+  delegate_to: localhost
+  tags:
+    - dns
+
+- name: check if dns entry already exists
+  route53:
+    aws_access_key: "{{ lookup('file', '/etc/ssl/keys/aws_route53/aws_access_key_route53.key') }}"
+    aws_secret_key: "{{ lookup('file', '/etc/ssl/keys/aws_route53/aws_secret_key_route53.key') }}"
+    record: "{{ inventory_hostname }}"
+    zone: "{{ cHostedZone }}"
+    state: get
+    type: A
+  delegate_to: localhost
+  register: entryExists
+  failed_when: entryExists.set.value is defined
+  tags:
+    - dns
+
+- name: create a new DNS entry at Route53
+  route53:
+    aws_access_key: "{{ lookup('file', '/etc/ssl/keys/aws_route53/aws_access_key_route53.key') }}"
+    aws_secret_key: "{{ lookup('file', '/etc/ssl/keys/aws_route53/aws_secret_key_route53.key') }}"
+    record: "{{ inventory_hostname }}"
+    zone: "{{ cHostedZone }}"
+    state: create
+    type: A
+    ttl: 7200
+    value: "{{ ipaddr }}"
+  when: entryExists.set.value is not defined
+  delegate_to: localhost
+  tags:
+    - dns

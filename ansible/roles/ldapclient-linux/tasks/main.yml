@@ -1,0 +1,47 @@
+---
+- name: update apt cache
+  apt:
+     update_cache=yes
+     cache_valid_time=3600
+  become: true
+  tags:
+    - update-cache
+
+- name: Install nslcd and nscd
+  apt: name={{ item }} state=present
+  become: true
+  with_items:
+    - nslcd
+    - nscd
+  tags:
+    - install, ldap-client, ldap-cache
+
+- name: Add nslcd.conf
+  become: true
+  notify: "restart nslcd"
+  template:
+    src: "nslcd.conf.j2"
+    dest: "/etc/nslcd.conf"
+    owner: "root"
+    group: "root"
+    mode: 0640
+  tags:
+     - config
+
+- name: configure libnss-ldapd
+  shell: echo debconf libnss-ldapd/nsswitch  select group, passwd, shadow | sudo debconf-set-selections && sudo dpkg-reconfigure -u libnss-ldapd
+  become: true
+  notify: "restart nslcd"
+  tags:
+      - config
+      - nsswitch
+
+- name: edit /etc/pam.d/common-session
+  lineinfile:
+         dest=/etc/pam.d/common-session line="session optional      pam_mkhomedir.so skel=/etc/skel umask=022" insertbefore="# end of pam-auth-update config"
+         state=present
+  become: true
+  notify: "restart nslcd"
+  tags:
+      - config
+      - pam.d

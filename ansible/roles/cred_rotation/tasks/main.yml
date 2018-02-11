@@ -1,0 +1,81 @@
+---
+- name: check if previous password change report is not presented
+  stat: path=/root/pw_report.txt
+  register: report
+  become: yes
+  delegate_to: localhost
+  run_once: True
+
+- fail: msg="Please create a backup of /root/pw_report.txt and then delete a file"
+  when: report.stat.exists == True and ( pw_change is defined and pw_change )
+  delegate_to: localhost
+  run_once: True
+
+- name: create emergadm user
+  user:
+    createhome: yes
+    groups: sudo
+    name: emergadm
+    uid: 1301
+    shell: /bin/bash
+    state: present
+  become: yes
+
+- name: generate and change emergadm password
+  block:
+     - name: generate password
+       shell: dd if=/dev/urandom bs=1 count=16 2>/dev/null | base64 -w 0 | rev | cut -b 2- | rev
+       register: pw_output
+
+     - name: change password
+       user:
+         name: emergadm
+         state: present
+         password: "{{ pw_output.stdout|password_hash('sha512') }}"
+
+     - name: write password to file
+       shell: echo "{{ inventory_hostname }},{{ ansible_nodename }},emergadm,{{ pw_output.stdout }},Linux servers" >> /root/pw_report.txt
+       delegate_to: localhost
+
+  when: pw_change is defined and pw_change
+  become: yes
+
+- name: create cmgmtuser user
+  user:
+    createhome: yes
+    groups: sudo
+    name: cmgmtuser
+    uid: 1302
+    shell: /bin/bash
+    state: present
+  become: yes
+
+- name: put new key for cmgmtuser user
+  authorized_key:
+    user: cmgmtuser
+    state: present
+    key: "{{ lookup('file', 'files/cmgmtuser_id_rsa.pub') }}"
+  become: yes
+
+- name: enable sudo without password for cmgmtuser user
+  lineinfile: "line='cmgmtuser    ALL=NOPASSWD: ALL' dest=/etc/sudoers"
+  become: yes
+
+- name: remove oldadmin user
+  user:
+    name: oldadmin
+    state: absent
+    force: yes
+  when: remove_oldadmin is defined and remove_oldadmin
+  become: yes
+  tags:
+    - remove_oldadmin
+
+- name: remove oldadmin home directory
+  file:
+    dest: /home/oldadmin
+    state: absent
+  when: remove_oldadmin is defined and remove_oldadmin
+  become: yes
+  tags:
+    - remove_oldadmin

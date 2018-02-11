@@ -1,0 +1,10 @@
+#Allow access from all hosts in stage an live inventories
+{% for ip in hosts_allow.stdout_lines %}
+-A INPUT -s {{ ip }} -i eth0 -p tcp -m tcp -m multiport --dports 389,636 -m state --state NEW,ESTABLISHED -j ACCEPT
+{% endfor %}
+
+#Access from local office
+-A INPUT -s {{ office_networks }} -i eth0 -p tcp -m tcp -m multiport --dports 389,636 -m state --state NEW,ESTABLISHED -j ACCEPT
+
+#Foreign clients
+-A INPUT -s clinet.aws.com -i eth0 -p tcp -m tcp -m multiport --dports 389,636 -m state --state NEW,ESTABLISHED -j ACCEPT

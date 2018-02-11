@@ -1,0 +1,10 @@
+auto lo
+iface lo inet loopback
+
+auto eth0
+iface eth0 inet static
+address {{ ipaddr }}
+netmask {{ netmask }}
+gateway {{ gw }}
+
+source /etc/network/interfaces.d/*.cfg

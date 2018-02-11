@@ -1,0 +1,6 @@
+---
+- name: disable firewall
+  apt: name="arno-iptables-firewall" state=absent purge=yes
+  become: yes
+  tags:
+    - disable_arno

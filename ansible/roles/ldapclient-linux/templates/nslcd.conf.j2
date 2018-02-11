@@ -1,0 +1,48 @@
+# #####  This file is under Ansible management   #####
+# /etc/nslcd.conf
+# nslcd configuration file. See nslcd.conf(5)
+# for details.
+
+# Mappings for Active Directory
+pagesize 1000
+referrals off
+
+# The user and group nslcd should run as.
+uid nslcd
+gid nslcd
+
+#The LDAP protocol version to use.
+ldap_version 3
+
+# Where is the LDAP
+uri ldaps://ldap.myhost.com:636
+
+# Connect-Account
+
+binddn cn=admin,cn=Users,dc=ldap,dc=myhost,dc=com
+bindpw <ldap password>
+
+base <your basedn>
+
+# scope for users to get a smaller query
+base passwd OU=Active_Users,OU=Accounts,dc=ldap,dc=myhost,dc=com
+base shadow OU=Active_Users,OU=Accounts,dc=ldap,dc=myhost,dc=com
+base group  OU=_Linux_Groups,OU=App_Groups,OU=Accounts,dc=ldap,dc=myhost,dc=com
+
+filter passwd (&(Objectclass=user)(!(objectClass=computer)))
+map    passwd uid           sAMAccountName
+map    passwd gidNumber     objectSid:S-1-5-21-3513950542-2597337894-2577164127
+map    passwd homeDirectory "/home/$sAMAccountName"
+map    passwd gecos         displayName
+map    passwd loginShell    "/bin/bash"
+
+# Filter for any AD group or user in the baseDN. the reason for filtering for the
+# user to make sure group listing for user files don't say '<user> <gid>'. instead will say '<user> <user>'
+
+filter group (&(|(objectClass=group)(Objectclass=user))(!(objectClass=computer)))
+map    group gidNumber     gidNumber
+map    group cn            sAMAccountName
+
+# SSL options
+ssl on
+tls_reqcert never

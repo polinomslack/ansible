@@ -1,0 +1,32 @@
+---
+    - name: create dbdump user
+      user:
+        createhome: yes
+        name: dbdump
+        shell: /bin/bash
+        state: present
+      become: yes
+
+    - name: enable keybased ssh auth for dbdump
+      authorized_key:
+        state: present
+        user: dbdump
+        key: "{{ lookup('file', 'files/dbdump_id_rsa.pub') }}"
+      become: yes
+
+    - name: allow dbdump login via ssh
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: '^AllowGroups.*'
+        state: present
+        line: AllowGroups sudo runusers dbdump
+      notify: sshd_restart
+      become: yes
+
+    - name: delete AllowUsers
+      lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: 'AllowUsers.*'
+        state: absent
+      notify: sshd_restart
+      become: yes

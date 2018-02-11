@@ -1,0 +1,233 @@
+---
+- name: check variables
+  fail: msg="All variables must be defined. {{ item }} is not defined."
+  when: "{{ item }} is not defined"
+  with_items:
+    - ipaddr
+    - netmask
+    - gw
+    - cores
+    - memory
+    - storage_size
+    - api_password
+    - hypervisor
+
+- name: include DNS creation tasks
+  include_tasks: create_dns_entry.yml
+  tags:
+    - dns
+
+- name: check pip is installed
+  apt: name=python-pip state=present update_cache=yes
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: check proxmoxer and requests python modules are installed
+  pip: name={{ item }}
+  with_items:
+    - proxmoxer
+    - requests
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: check image
+  stat: path=/data/template/iso/{{ image_name }}.img checksum_algorithm=sha256
+  register: imgstat
+  delegate_to: "{{ hypervisor }}"
+
+- name: create folder /data/template/iso
+  file: path=/data/template/iso state=directory recurse=yes
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: download cloud img for Ubuntu LTS 16.04
+  get_url: dest=/data/template/iso/ url=https://cloud-images.ubuntu.com/xenial/current/{{ image_name }}.img
+  become: true
+  when: imgstat.stat.exists == False
+  delegate_to: "{{ hypervisor }}"
+
+- name: convert img to qcow2
+  command: qemu-img convert -O raw /data/template/iso/{{ image_name }}.img /data/template/iso/{{ inventory_hostname }}.raw
+  become: true
+  delegate_to: "{{ hypervisor }}"
+
+- name: create directory for img reassembling
+  file: state=directory dest=/mnt/build
+  become: true
+  delegate_to: "{{ hypervisor }}"
+
+- name: mount raw disk for reassembling
+  shell: mount -t ext4 -o loop,offset=$((2048*512)) /data/template/iso/{{ inventory_hostname }}.raw /mnt/build
+  become: true
+  delegate_to: "{{ hypervisor }}"
+
+- name: set up network interfaces
+  template: src=files/interfaces.j2 dest=/mnt/build/etc/network/interfaces mode=0644 owner=root group=root
+  become: true
+  delegate_to: "{{ hypervisor }}"
+
+- name: copy resolv.conf
+  copy: src=resolv.conf.j2 dest=/mnt/build/etc/resolv.conf
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: create group
+  lineinfile: line='cmgmtuser:x:1302:1302' dest='/mnt/build/etc/group' state=present
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: create user passwd
+  lineinfile: line='cmgmtuser:x:1302:1302:,,,:/home/cmgmtuser:/bin/bash' dest='/mnt/build/etc/passwd' state=present
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: create user shadow
+  lineinfile: line='cmgmtuser:!:17302:0:99999:7:::' dest='/mnt/build/etc/shadow' state=present
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: create user home catalog
+  file: state=directory dest={{ item }} owner=1302 group=1302
+  become: yes
+  with_items:
+    - /mnt/build/home/cmgmtuser
+    - /mnt/build/home/cmgmtuser/.ssh
+  delegate_to: "{{ hypervisor }}"
+
+- name: copy ssh keys
+  copy:
+    content: "{{ lookup('file', 'roles/cred_rotation/files/cmgmtuser_id_rsa.pub') }}"
+    dest: "/mnt/build/home/cmgmtuser/.ssh/authorized_keys"
+    mode: 0600
+    owner: 1302
+    group: 1302
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: enable password authentication
+  lineinfile: regexp='PasswordAuthentication no' line='PasswordAuthentication yes' state=present dest=/mnt/build/etc/ssh/sshd_config
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: change hostname
+  lineinfile: regexp='ubuntu' line={{ inventory_hostname }} state=present dest=/mnt/build/etc/hostname
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: add entry to hosts
+  lineinfile: line="{{ ipaddr }} {{ inventory_hostname }}" state=present dest=/mnt/build/etc/hosts
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: fix grub
+  shell: sed -i 's/console=ttyS0/nomodeset net.ifnames=0 biosdevname=0/g' /mnt/build/boot/grub/grub.cfg
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: fix grub default
+  shell: sed -i 's/console=ttyS0/nomodeset net.ifnames=0 biosdevname=0/g' /mnt/build/etc/default/grub
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: fix grub timeout
+  shell: sed -i 's/GRUB_TIMEOUT=0/GRUB_TIMEOUT=10/g' /mnt/build/etc/default/grub
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: delete grub from cloud-image
+  file: dest=/mnt/build/etc/default/grub.d/50-cloudimg-settings.cfg state=absent
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: dhclient fix
+  lineinfile: regexp='timeout 300;' line='timeout 5;' state=present dest=/mnt/build/etc/dhcp/dhclient.conf
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: cloud-init fix
+  shell: rm -rf /mnt/build/etc/systemd/system/cloud-init.target.wants
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: add cmgmtuser to sudo
+  lineinfile: "line='cmgmtuser    ALL=NOPASSWD: ALL' dest=/mnt/build/etc/sudoers"
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: generate ssh host keys
+  copy: src=files/rc.local dest=/mnt/build/etc/rc.local mode=0755
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: umount raw disk
+  shell: umount /mnt/build
+  become: true
+  delegate_to: "{{ hypervisor }}"
+
+- name: convert raw to qcow2
+  command: qemu-img convert -O qcow2 /data/template/iso/{{ inventory_hostname }}.raw /data/template/iso/{{ inventory_hostname }}.qcow2
+  become: true
+  delegate_to: "{{ hypervisor }}"
+
+- name: resize qcow2 to desired size
+  command: qemu-img resize /data/template/iso/{{ inventory_hostname }}.qcow2 {{ storage_size }}G
+  become: true
+  delegate_to: "{{ hypervisor }}"
+
+- name: delete temporary image
+  file: dest=/data/template/iso/{{ inventory_hostname }}.raw state=absent
+  become: true
+  delegate_to: "{{ hypervisor }}"
+
+- name: create VM at proxmox
+  proxmox_kvm:
+    api_user: admin@pve
+    api_password: "{{ api_password }}"
+    api_host: "{{ hypervisor }}"
+    name: "{{ inventory_hostname }}"
+    node: "{{ hypervisor.split('.')[0]}}"
+    net: '{"net0":"virtio,bridge=vmbr0,"}'
+    virtio: '{"virtio0":"{{storage}}:{{storage_size}},format=qcow2",}'
+    cores: "{{ cores }}"
+    vcpus: "{{ cores }}"
+    memory: "{{ (memory|int)*1024 }}"
+    state: present
+    ostype: l26
+    localtime: no
+    kvm: yes
+  register: vm
+  delegate_to: "{{ hypervisor }}"
+  become: true
+
+- pause:
+    seconds: 15
+
+- name: replace the created VM disk
+  command: mv /data/template/iso/{{ inventory_hostname }}.qcow2 /data/images/{{ vm.vmid }}/vm-{{ vm.vmid }}-disk-1.qcow2
+  become: yes
+  delegate_to: "{{ hypervisor }}"
+
+- name: start created vm
+  proxmox_kvm:
+    api_user    : admin@pve
+    api_password: "{{ api_password }}"
+    api_host    : "{{ hypervisor }}"
+    name        : "{{ inventory_hostname }}"
+    node        : "{{ hypervisor.split('.')[0]}}"
+    state       : started
+  delegate_to: "{{ hypervisor }}"
+
+- name: wait for created vm starts
+  wait_for:
+    timeout: 300
+    delay: 5
+    port: 22
+    state: started
+    host: "{{ inventory_hostname }}"
+  delegate_to: localhost
+
+- include: common_vm.yml
+
+
+
+

@@ -1,0 +1,9 @@
+---
+- name: restart nslcd
+  action: service name=nslcd state=restarted enabled=yes
+  become: true
+  notify: "restart nscd"
+
+- name: restart nscd
+  action: service name=nscd state=restarted enabled=yes
+  become: true
