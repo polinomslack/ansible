@@ -47,8 +47,9 @@ function changeip {
   check_return $? $*
   sed -i "/^.*broadcast.*$/d;/^.*network.*$/d" /mnt/build/etc/network/interfaces
   check_return $? $*
-  sed -i "s/^.*bitbucket\.prod\.win\.windeln-it\.de.*$/${ip} bitbucket.prod.win.windeln-it.de bitbucket/" /etc/hosts
-  check_return $? $*
+# Change hostname
+#  sed -i "s/^.*hostname.*$/${ip} newhostname" /etc/hosts
+#  check_return $? $*
   umount /mnt/build/
   check_return $? $*
   lvchange -a n /dev/debian8-changeme-vg/root
@@ -63,7 +64,7 @@ if [ $? -ne 0 ];then
 else
   echo "error: /mnt/u137034 is already mounted" >&2; exit 1
 fi
-latest=$(find /mnt/u137034/proxmox-backups/dump/ -name "*${vmid}*" -ctime -1)
+latest=$(find /mnt/u137034/dump/ -name "*${vmid}*" -ctime -1)
 if ! [ -z $latest ]; then
  qm stop $newvmid
  sleep 5
@@ -74,3 +75,4 @@ fi
 changeip $ip $nm $gw && qm start $newvmid
 sleep 10
 umount /mnt/u137034
+
