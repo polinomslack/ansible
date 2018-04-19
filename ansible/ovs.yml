@@ -1,0 +1,4 @@
+---
+- hosts: rancher_nodes
+  roles:
+    - { role: ovs, become: yes }

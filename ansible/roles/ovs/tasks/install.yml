@@ -1,0 +1,34 @@
+- name: install ovs
+  apt:
+    name: openvswitch-switch
+    state: present
+    update_cache: yes
+
+- name: gather facts from all involved hosts
+  setup:
+  delegate_to: "{{item}}"
+  delegate_facts: True
+  loop: "{{groups['rancher_nodes']}}"
+
+- name: create configuration for br-int
+  template:
+    src: br-int.j2
+    dest: /etc/network/interfaces.d/br-int.cfg
+
+- name: restart networking
+  shell: ifdown --exclude=lo -a && sudo ifup --exclude=lo -a
+
+- name: restart openvswitch-switch
+  systemd:
+    name: openvswitch-switch.service
+    state: restarted
+    enabled: yes
+
+- name: enable proxy_arp
+  sysctl:
+    name: "{{ item }}"
+    value: 1
+    state: present
+  with_items:
+    - net.ipv4.conf.all.forwarding
+    - net.ipv4.conf.br-int.proxy_arp
