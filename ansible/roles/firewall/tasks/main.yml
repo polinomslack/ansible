@@ -19,6 +19,12 @@
   file: path="/etc/iptables/temprules" state=directory mode=0755 owner=root group=root mode=0660
   become: true
 
+- name: gather facts for "mysql" members
+  setup:
+  delegate_to: "{{ item }}"
+  delegate_facts: True
+  loop: "{{ groups['mysql'] }}"
+
 - name: apply default firewall rules
   template: src=rules/fw_default.j2 dest=/etc/iptables/temprules/_default.v4 owner=root group=root mode=0660
   become: yes

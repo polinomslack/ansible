@@ -1,4 +1,4 @@
 ---
-- hosts: rancher_nodes
+- hosts: hypervisors
   roles:
     - { role: ovs, become: yes }
