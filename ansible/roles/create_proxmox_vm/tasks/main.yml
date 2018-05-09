@@ -4,7 +4,7 @@
   when: "{{ item }} is not defined"
   with_items:
     - ipaddr
-    - netmask
+    - prefix
     - gw
     - cores
     - memory
@@ -40,8 +40,8 @@
   become: yes
   delegate_to: "{{ hypervisor }}"
 
-- name: download cloud img for Ubuntu LTS 16.04
-  get_url: dest=/data/template/iso/ url=https://cloud-images.ubuntu.com/xenial/current/{{ image_name }}.img
+- name: download cloud img for Ubuntu LTS 18.04 - just for test
+  get_url: dest=/data/template/iso/ url=https://cloud-images.ubuntu.com/bionic/current/{{ image_name }}.img
   become: true
   when: imgstat.stat.exists == False
   delegate_to: "{{ hypervisor }}"
@@ -56,13 +56,13 @@
   become: true
   delegate_to: "{{ hypervisor }}"
 
-- name: mount raw disk for reassembling
-  shell: mount -t ext4 -o loop,offset=$((2048*512)) /data/template/iso/{{ inventory_hostname }}.raw /mnt/build
+- name: mount raw disk for reassembling; 227328 is a number of first block containing root partition
+  shell: mount -t ext4 -o loop,offset=$((227328*512)) /data/template/iso/{{ inventory_hostname }}.raw /mnt/build
   become: true
   delegate_to: "{{ hypervisor }}"
 
 - name: set up network interfaces
-  template: src=files/interfaces.j2 dest=/mnt/build/etc/network/interfaces mode=0644 owner=root group=root
+  template: src=templates/netplan.j2 dest=/mnt/build/etc/netplan/50-cloud-init.yaml mode=0644 owner=root group=root
   become: true
   delegate_to: "{{ hypervisor }}"
 
@@ -72,17 +72,17 @@
   delegate_to: "{{ hypervisor }}"
 
 - name: create group
-  lineinfile: line='cmgmtuser:x:1302:1302' dest='/mnt/build/etc/group' state=present
+  lineinfile: line='cmu:x:1302:1302' dest='/mnt/build/etc/group' state=present
   become: yes
   delegate_to: "{{ hypervisor }}"
 
 - name: create user passwd
-  lineinfile: line='cmgmtuser:x:1302:1302:,,,:/home/cmgmtuser:/bin/bash' dest='/mnt/build/etc/passwd' state=present
+  lineinfile: line='cmu:x:1302:1302:,,,:/home/cmu:/bin/bash' dest='/mnt/build/etc/passwd' state=present
   become: yes
   delegate_to: "{{ hypervisor }}"
 
 - name: create user shadow
-  lineinfile: line='cmgmtuser:!:17302:0:99999:7:::' dest='/mnt/build/etc/shadow' state=present
+  lineinfile: line='cmu:!:17302:0:99999:7:::' dest='/mnt/build/etc/shadow' state=present
   become: yes
   delegate_to: "{{ hypervisor }}"
 
@@ -90,14 +90,14 @@
   file: state=directory dest={{ item }} owner=1302 group=1302
   become: yes
   with_items:
-    - /mnt/build/home/cmgmtuser
-    - /mnt/build/home/cmgmtuser/.ssh
+    - /mnt/build/home/cmu
+    - /mnt/build/home/cmu/.ssh
   delegate_to: "{{ hypervisor }}"
 
 - name: copy ssh keys
   copy:
-    content: "{{ lookup('file', 'roles/cred_rotation/files/cmgmtuser_id_rsa.pub') }}"
-    dest: "/mnt/build/home/cmgmtuser/.ssh/authorized_keys"
+    content: "{{ lookup('file', 'roles/cred_rotation/files/cmu_id_rsa.pub') }}"
+    dest: "/mnt/build/home/cmu/.ssh/authorized_keys"
     mode: 0600
     owner: 1302
     group: 1302
@@ -149,8 +149,8 @@
   become: yes
   delegate_to: "{{ hypervisor }}"
 
-- name: add cmgmtuser to sudo
-  lineinfile: "line='cmgmtuser    ALL=NOPASSWD: ALL' dest=/mnt/build/etc/sudoers"
+- name: add cmu to sudo
+  lineinfile: "line='cmu    ALL=NOPASSWD: ALL' dest=/mnt/build/etc/sudoers"
   become: yes
   delegate_to: "{{ hypervisor }}"
 
@@ -202,6 +202,7 @@
 - pause:
     seconds: 15
 
+# So if we want to use advanced storages (like from separately mounted SSD) we have to refactor this part also.
 - name: replace the created VM disk
   command: mv /data/template/iso/{{ inventory_hostname }}.qcow2 /data/images/{{ vm.vmid }}/vm-{{ vm.vmid }}-disk-1.qcow2
   become: yes

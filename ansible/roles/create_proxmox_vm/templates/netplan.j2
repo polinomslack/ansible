@@ -1,0 +1,11 @@
+network:
+  version: 2
+  renderer: networkd
+  ethernets:
+    eth0:
+      dhcp4: no
+      dhcp6: no
+      addresses: [{{ ipaddr }}/{{ prefix }}]
+      gateway4: {{ gw }}
+      nameservers:
+        addresses: [ 8.8.8.8, 8.8.4.4 ]

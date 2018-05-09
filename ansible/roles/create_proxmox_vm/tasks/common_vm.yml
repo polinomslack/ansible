@@ -3,6 +3,11 @@
   raw: apt-get install -y python aptitude
   become: true
 
+#partition vda1 is located in the end of the qcow2 disk; initial size is 2Gb, so we just fix GPT and then recreate partition until the end of qcow2.
+- name: resize rootfs to original size
+  shell: sgdisk -C /dev/vda && sgdisk -d 1 /dev/vda && sgdisk -N 1 /dev/vda && partprobe /dev/vda ; resize2fs /dev/vda1
+  become: true
+
 - name: set timezone
   copy: remote_src=yes src=/usr/share/zoneinfo/Europe/Berlin dest=/etc/localtime owner=root group=root mode=0644
   become: yes
