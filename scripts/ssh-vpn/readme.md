@@ -3,7 +3,6 @@
 For server machine
 sshd:
 
-
 ClientAliveInterval 20
 ClientAliveCountMax 5
 
