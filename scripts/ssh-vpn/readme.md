@@ -16,6 +16,6 @@ For client machine:
 ~/.ssh/config:
 
 Host *
-  ServerAliveInterval 30
-  ServerAliveCountMax 5
+ServerAliveInterval 30
+ServerAliveCountMax 5
 
