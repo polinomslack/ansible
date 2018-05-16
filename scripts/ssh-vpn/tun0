@@ -1,0 +1,11 @@
+#debian/ubuntu tun configuration file
+iface tun0 inet static
+        pre-up ssh -f -w 0:0 <dst ip address> 'ifdown tun0; ifup tun0; iptables -A FORWARD -d 10.0.0.0/20 -i tun0 -j ACCEPT'
+        pre-up sleep 5
+        address 10.0.3.253
+        pointopoint 10.0.3.252
+        netmask 255.255.240.0
+        up ip route add 10.0.0.0/20 via 10.0.3.253
+	    post-up iptables -A INPUT -i tun0 -j ACCEPT
+        down ip route del 10.0.0.0/20 via 10.0.3.253
+	    post-down iptables -D INPUT -i tun0 -j ACCEPT
